@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    name: 🚀 CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout branch
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup
+        uses: ./.github/actions/setup
+
+      - name: ✅ Run lint
+        run: pnpm lint
+
+      - name: ✅ Run format check
+        run: pnpm format
+
+      - name: ✅ Run typecheck
+        run: pnpm typecheck
+
+      - name: 🧪 Run tests
+        run: pnpm test
+
+      - name: 🔧 Build
+        run: pnpm build
