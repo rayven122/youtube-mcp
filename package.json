@@ -1,0 +1,58 @@
+{
+  "name": "youtube-mcp",
+  "version": "0.1.0",
+  "description": "YouTube MCP サーバー - YouTube動画情報、チャンネル、プレイリスト管理",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "license": "MIT",
+  "author": "rayven",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rayven122/youtube-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rayven122/youtube-mcp/issues"
+  },
+  "homepage": "https://github.com/rayven122/youtube-mcp#readme",
+  "keywords": [
+    "mcp",
+    "youtube",
+    "youtube-api",
+    "model-context-protocol"
+  ],
+  "files": [
+    "dist",
+    "!dist/__tests__"
+  ],
+  "scripts": {
+    "build": "tsc --incremental false && tsc-alias",
+    "clean": "git clean -xdf .cache dist node_modules",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint",
+    "format": "prettier --check .",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.21.0",
+    "@plussub/srt-vtt-parser": "^2.0.5",
+    "dotenv": "^17.2.3",
+    "neverthrow": "^8.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^1.4.1",
+    "@eslint/js": "^9.39.1",
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.0",
+    "@types/node": "^24.10.0",
+    "@vitest/coverage-v8": "^4.0.7",
+    "eslint": "^9.39.1",
+    "eslint-plugin-import": "^2.32.0",
+    "prettier": "^3.6.2",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vitest": "^4.0.7"
+  },
+  "packageManager": "pnpm@10.20.0"
+}
