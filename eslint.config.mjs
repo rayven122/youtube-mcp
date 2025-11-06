@@ -2,27 +2,26 @@ import { fileURLToPath } from "node:url";
 import { includeIgnoreFile } from "@eslint/compat";
 import eslint from "@eslint/js";
 import importPlugin from "eslint-plugin-import";
+import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 const gitignorePath = fileURLToPath(new URL(".gitignore", import.meta.url));
 
-/** @typedef {import('typescript-eslint').Config} Config */
-
-/** @type {Config} */
-export default tseslint.config(
+export default defineConfig(
   // https://eslint.org/docs/latest/use/configure/ignore#including-gitignore-files
   includeIgnoreFile(gitignorePath),
+  {
+    ignores: ["*.config.*"],
+  },
+  eslint.configs.recommended,
+  tseslint.configs.recommended,
+  tseslint.configs.recommendedTypeChecked,
+  tseslint.configs.stylisticTypeChecked,
   {
     files: ["**/*.js", "**/*.mjs", "**/*.ts"],
     plugins: {
       import: importPlugin,
     },
-    extends: [
-      eslint.configs.recommended,
-      ...tseslint.configs.recommended,
-      ...tseslint.configs.recommendedTypeChecked,
-      ...tseslint.configs.stylisticTypeChecked,
-    ],
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -59,11 +58,10 @@ export default tseslint.config(
   },
   // Parser options
   {
-    linterOptions: { reportUnusedDisableDirectives: true },
+    linterOptions: { reportUnusedDisableDirectives: "error" },
     languageOptions: {
       parserOptions: {
-        project: "./tsconfig.eslint.json",
-        tsconfigRootDir: import.meta.dirname,
+        projectService: true,
       },
     },
   },
