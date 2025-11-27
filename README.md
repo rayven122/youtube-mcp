@@ -84,6 +84,7 @@ TRANSPORT_MODE=http YOUTUBE_API_KEY=your-api-key HTTP_PORT=3000 node ./dist/inde
 ```
 
 環境変数：
+
 - `TRANSPORT_MODE`: `http` に設定するとHTTPモードで起動
 - `YOUTUBE_API_KEY`: YouTube Data API v3のAPIキー（省略可、ヘッダーで渡す場合）
 - `HTTP_PORT`: HTTPサーバーのポート番号（デフォルト: 3000）
@@ -93,6 +94,7 @@ TRANSPORT_MODE=http YOUTUBE_API_KEY=your-api-key HTTP_PORT=3000 node ./dist/inde
 APIキーは以下の2つの方法で指定できます：
 
 1. **環境変数**（サーバー起動時）
+
    ```bash
    TRANSPORT_MODE=http YOUTUBE_API_KEY=your-api-key node ./dist/index.js
    ```
@@ -111,6 +113,7 @@ APIキーは以下の2つの方法で指定できます：
 #### エンドポイント
 
 HTTPサーバーは以下のエンドポイントを提供します：
+
 - `POST /mcp` - MCP Streamable HTTPエンドポイント
 - `GET /health` - ヘルスチェックエンドポイント
 
