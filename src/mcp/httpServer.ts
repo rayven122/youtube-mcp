@@ -101,9 +101,7 @@ export const startHttpServer = () => {
         if (result.isErr()) {
           throw new McpError(
             ErrorCode.InternalError,
-            result.error instanceof Error
-              ? result.error.message
-              : "Operation failed",
+            result.error instanceof Error ? result.error.message : "Operation failed",
           );
         }
 
