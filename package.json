@@ -1,10 +1,13 @@
 {
-  "name": "youtube-mcp",
+  "name": "@rayven/youtube-mcp",
   "version": "0.1.0",
   "description": "YouTube MCP サーバー - YouTube動画情報、チャンネル、プレイリスト管理",
   "type": "module",
-  "private": true,
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "youtube-mcp": "./dist/index.js"
+  },
   "license": "MIT",
   "author": "rayven",
   "repository": {
@@ -23,7 +26,9 @@
   ],
   "files": [
     "dist",
-    "!dist/__tests__"
+    "!dist/__tests__",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc --incremental false && tsc-alias",
@@ -31,7 +36,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint",
     "format": "prettier --check .",
-    "test": "vitest"
+    "test": "vitest",
+    "prepublishOnly": "pnpm build && pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.21.0",
@@ -53,6 +59,9 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.3",
     "vitest": "^4.0.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "packageManager": "pnpm@10.20.0"
 }
