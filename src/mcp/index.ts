@@ -17,7 +17,12 @@ import { videoTools } from "./tools/videos.js";
 
 export const startServer = async () => {
   // 環境変数から YouTube API キーを取得して検証
-  const apiKeyResult = youtubeApi.getApiKeyFromEnv(process.env);
+  const envApiKey = process.env.YOUTUBE_API_KEY;
+  if (!envApiKey) {
+    throw new McpError(ErrorCode.InvalidParams, "YOUTUBE_API_KEY is required");
+  }
+
+  const apiKeyResult = youtubeApi.validateApiKey(envApiKey);
   if (apiKeyResult.isErr()) {
     throw new McpError(ErrorCode.InvalidParams, apiKeyResult.error.message);
   }

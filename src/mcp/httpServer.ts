@@ -18,8 +18,9 @@ import { videoTools } from "./tools/videos.js";
 
 export const startHttpServer = () => {
   // 環境変数から YouTube API キーを取得（オプション）
-  const envApiKeyResult = youtubeApi.getApiKeyFromEnv(process.env);
-  const hasEnvApiKey = envApiKeyResult.isOk();
+  const envApiKey = process.env.YOUTUBE_API_KEY;
+  const envApiKeyResult = envApiKey ? youtubeApi.validateApiKey(envApiKey) : null;
+  const hasEnvApiKey = envApiKeyResult?.isOk() ?? false;
 
   if (!hasEnvApiKey) {
     console.error(
@@ -40,9 +41,7 @@ export const startHttpServer = () => {
       let apiKey;
       if (headerApiKey) {
         // ヘッダーからAPIキーを検証
-        const headerApiKeyResult = youtubeApi.getApiKeyFromEnv({
-          YOUTUBE_API_KEY: headerApiKey,
-        });
+        const headerApiKeyResult = youtubeApi.validateApiKey(headerApiKey);
         if (headerApiKeyResult.isErr()) {
           res.status(401).json({
             error: "Invalid API key provided in header",
@@ -51,7 +50,7 @@ export const startHttpServer = () => {
           return;
         }
         apiKey = headerApiKeyResult.value;
-      } else if (hasEnvApiKey) {
+      } else if (envApiKeyResult?.isOk()) {
         // 環境変数のAPIキーを使用
         apiKey = envApiKeyResult.value;
       } else {

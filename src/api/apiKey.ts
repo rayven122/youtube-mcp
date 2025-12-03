@@ -21,12 +21,10 @@ export type YoutubeApiKey = z.infer<typeof YoutubeApiKeySchema> & {
 };
 
 /**
- * Gets YouTube API key from environment variables and validates it
+ * Validates a YouTube API key string and returns it as a branded type
  */
-export const getApiKeyFromEnv = (
-  env: NodeJS.ProcessEnv,
-): Result<YoutubeApiKey, Error> => {
-  const result = YoutubeApiKeySchema.safeParse(env.YOUTUBE_API_KEY);
+export const validateApiKey = (apiKey: string): Result<YoutubeApiKey, Error> => {
+  const result = YoutubeApiKeySchema.safeParse(apiKey);
 
   if (!result.success) {
     return err(new Error(result.error.errors[0]?.message ?? "Invalid API key"));
