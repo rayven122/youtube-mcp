@@ -56,6 +56,8 @@ pnpm build
 
 ## 使用方法
 
+### STDIOモード（デフォルト）
+
 ```json
 {
   "mcpServers": {
@@ -72,6 +74,79 @@ pnpm build
 ```
 
 環境変数を設定してエディタを再起動すると、YouTube MCPツールが利用可能になります。
+
+### HTTPモード（Streamable HTTP）
+
+HTTPモードで起動する場合：
+
+```bash
+TRANSPORT_MODE=http YOUTUBE_API_KEY=your-api-key HTTP_PORT=3000 node ./dist/index.js
+```
+
+環境変数：
+
+- `TRANSPORT_MODE`: `http` に設定するとHTTPモードで起動
+- `YOUTUBE_API_KEY`: YouTube Data API v3のAPIキー（省略可、ヘッダーで渡す場合）
+- `HTTP_PORT`: HTTPサーバーのポート番号（デフォルト: 3000）
+
+#### APIキーの指定方法
+
+APIキーは以下の2つの方法で指定できます：
+
+1. **環境変数**（サーバー起動時）
+
+   ```bash
+   TRANSPORT_MODE=http YOUTUBE_API_KEY=your-api-key node ./dist/index.js
+   ```
+
+2. **HTTPヘッダー**（リクエストごと）
+   ```bash
+   curl -X POST http://localhost:3000/mcp \
+     -H "Content-Type: application/json" \
+     -H "Accept: application/json, text/event-stream" \
+     -H "X-YouTube-API-Key: your-api-key" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+   ```
+
+ヘッダーでAPIキーを指定した場合、環境変数より優先されます。これにより、複数のAPIキーを使い分けることができます。
+
+#### エンドポイント
+
+HTTPサーバーは以下のエンドポイントを提供します：
+
+- `POST /mcp` - MCP Streamable HTTPエンドポイント
+- `GET /health` - ヘルスチェックエンドポイント
+
+#### クライアント設定例
+
+環境変数でAPIキーを設定する場合：
+
+```json
+{
+  "mcpServers": {
+    "youtube-mcp": {
+      "type": "streamableHttp",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+ヘッダーでAPIキーを渡す場合：
+
+```json
+{
+  "mcpServers": {
+    "youtube-mcp": {
+      "type": "streamableHttp",
+      "url": "http://localhost:3000/mcp",
+      "headers": {
+        "X-YouTube-API-Key": "${YOUTUBE_API_KEY}"
+      }
+    }
+  }
+}
+```
 
 ## ディレクトリ構成(src/)
 
