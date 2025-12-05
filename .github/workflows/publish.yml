@@ -1,0 +1,26 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup
+        uses: ./.github/actions/setup
+
+      - name: 🔧 Build
+        run: pnpm build
+
+      - name: 📦 Publish to npm
+        run: pnpm publish --provenance --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
