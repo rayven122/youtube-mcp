@@ -63,13 +63,13 @@ curl http://localhost:8080/health
 ```bash
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
+  -H "Accept: application/json" \
   -H "X-YouTube-API-Key: your_api_key" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 **重要な注意点**：
-- `Accept`ヘッダーには `application/json, text/event-stream` を含める必要があります
+- `Accept`ヘッダーには `application/json` を含める必要があります
 - `X-YouTube-API-Key`ヘッダーでAPIキーを渡す（省略時は環境変数`YOUTUBE_API_KEY`が使用されます）
 
 #### 4. ツールの実行例
@@ -79,7 +79,7 @@ curl -X POST http://localhost:8080/mcp \
 ```bash
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
+  -H "Accept: application/json" \
   -H "X-YouTube-API-Key: your_api_key" \
   -d '{
     "jsonrpc": "2.0",
@@ -99,7 +99,7 @@ curl -X POST http://localhost:8080/mcp \
 ```bash
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
+  -H "Accept: application/json" \
   -H "X-YouTube-API-Key: your_api_key" \
   -d '{
     "jsonrpc": "2.0",
@@ -120,7 +120,7 @@ curl -X POST http://localhost:8080/mcp \
 ```bash
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
+  -H "Accept: application/json" \
   -H "X-YouTube-API-Key: your_api_key" \
   -d '{
     "jsonrpc": "2.0",
@@ -139,16 +139,15 @@ curl -X POST http://localhost:8080/mcp \
 
 #### 5. レスポンス形式
 
-レスポンスはServer-Sent Events (SSE)形式で返されます：
+レスポンスは標準的なJSON形式で返されます：
 
-```
-event: message
-data: {"jsonrpc":"2.0","result":{...},"id":1}
+```json
+{"jsonrpc":"2.0","result":{...},"id":1}
 ```
 
-JSONのみを抽出する場合：
+jqで整形する場合：
 ```bash
-curl ... | grep "^data: " | sed 's/^data: //' | jq .
+curl ... | jq .
 ```
 
 #### 6. HTTPモードのメリット
@@ -181,7 +180,7 @@ curl ... | grep "^data: " | sed 's/^data: //' | jq .
   - ビルドが完了しているか確認: `pnpm build`
 
 - **"Not Acceptable" エラーが返る場合**:
-  - `Accept`ヘッダーに `application/json, text/event-stream` が含まれているか確認
+  - `Accept`ヘッダーに `application/json` が含まれているか確認
   - curlコマンドのヘッダー部分を見直す
 
 - **"API key not valid" エラーが返る場合**:
@@ -585,14 +584,14 @@ curl http://localhost:8080/health
 # ツール一覧取得
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
+  -H "Accept: application/json" \
   -H "X-YouTube-API-Key: your-api-key" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 
 # 動画情報取得
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
+  -H "Accept: application/json" \
   -H "X-YouTube-API-Key: your-api-key" \
   -d '{
     "jsonrpc": "2.0",
@@ -653,7 +652,7 @@ pnpm test:coverage
 - [ ] 環境変数のAPIキーフォールバックが機能する
 - [ ] 複数の同時リクエストが正しく処理される（stateless動作）
 - [ ] リクエストごとにサーバーインスタンスが適切にクリーンアップされる
-- [ ] SSE形式のレスポンスが正しく返される
+- [ ] JSON形式のレスポンスが正しく返される
 - [ ] 異なるAPIキーで複数リクエストを送信できる
 
 ## 11. 字幕メタデータ関連ツール (Transcript Metadata Tools)

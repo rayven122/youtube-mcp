@@ -3,7 +3,8 @@ import type { YoutubeApiKey } from "@/api/apiKey.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -11,6 +12,7 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
+import type { ServerResponse } from "node:http";
 import { z } from "zod";
 
 import { handleToolRequest } from "./handlers.js";
@@ -25,6 +27,47 @@ const YoutubeApiKeySchema = z
   .string({ required_error: "API key is required" })
   .trim()
   .min(1, "API key is required");
+
+/**
+ * 純粋なJSON-RPC over HTTPトランスポート（SSE不使用）
+ * application/jsonのみを要求し、レスポンスも純粋なJSONで返す
+ */
+class JSONRPCHTTPTransport implements Transport {
+  private _response: ServerResponse | null = null;
+  private _messageHandler: ((message: JSONRPCMessage) => void) | null = null;
+
+  onclose?: () => void;
+  onerror?: (error: Error) => void;
+  onmessage?: (message: JSONRPCMessage) => void;
+
+  async start(): Promise<void> {
+    // ノーオペ: 接続はリクエストごとに管理される
+  }
+
+  async send(message: JSONRPCMessage): Promise<void> {
+    if (this._response && !this._response.headersSent) {
+      this._response.setHeader("Content-Type", "application/json");
+      this._response.end(JSON.stringify(message));
+    }
+  }
+
+  async close(): Promise<void> {
+    this._response = null;
+    this._messageHandler = null;
+  }
+
+  /**
+   * HTTPリクエストを処理してJSONRPCメッセージをサーバーに送信
+   */
+  handleRequest(res: ServerResponse, message: JSONRPCMessage): void {
+    this._response = res;
+
+    // onmessageハンドラーを呼び出してMcpServerにメッセージを渡す
+    if (this.onmessage) {
+      this.onmessage(message);
+    }
+  }
+}
 
 const startStreamableHttpServer = async () => {
   // HTTPポートの取得（デフォルト: 8080）
@@ -66,7 +109,7 @@ const startStreamableHttpServer = async () => {
 
   // リクエストごとにサーバーインスタンスを作成する関数
   const createMCPServer = (apiKey: YoutubeApiKey) => {
-    const server = new Server(
+    const mcpServer = new McpServer(
       {
         name: "youtube-mcp-server",
         version: "1.0.0",
@@ -78,8 +121,8 @@ const startStreamableHttpServer = async () => {
       },
     );
 
-    // ツール一覧の取得ハンドラー
-    server.setRequestHandler(ListToolsRequestSchema, () => {
+    // 低レベルAPIを使用してツールを登録（現在のJSON Schemaを維持）
+    mcpServer.server.setRequestHandler(ListToolsRequestSchema, () => {
       return {
         tools: [
           ...videoTools,
@@ -92,7 +135,7 @@ const startStreamableHttpServer = async () => {
     });
 
     // ツール実行ハンドラー
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    mcpServer.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name: toolName, arguments: args } = request.params;
 
       // すべてのツールを共通ハンドラーで処理
@@ -110,53 +153,83 @@ const startStreamableHttpServer = async () => {
       return result.value;
     });
 
-    return server;
+    return mcpServer;
   };
 
   // MCP エンドポイント（完全にstateless: リクエストごとにサーバーとトランスポートを作成）
   app.post("/mcp", async (req, res) => {
-    let transport: StreamableHTTPServerTransport | null = null;
-    let server: Server | null = null;
+    let transport: JSONRPCHTTPTransport | null = null;
+    let mcpServer: McpServer | null = null;
 
     try {
+      // Acceptヘッダーの検証（application/jsonのみ要求）
+      const acceptHeader = req.headers.accept;
+      if (!acceptHeader || !acceptHeader.includes("application/json")) {
+        res.status(406).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Not Acceptable: Client must accept application/json"
+          },
+          id: null
+        });
+        return;
+      }
+
+      // Content-Typeの検証
+      const contentType = req.headers["content-type"];
+      if (!contentType || !contentType.includes("application/json")) {
+        res.status(415).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Unsupported Media Type: Content-Type must be application/json"
+          },
+          id: null
+        });
+        return;
+      }
+
       // APIキーを取得
       const apiKey = extractApiKey(req);
 
       // リクエストごとに新しいサーバーとトランスポートを作成
-      server = createMCPServer(apiKey);
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // statelessモード
-      });
+      mcpServer = createMCPServer(apiKey);
+      transport = new JSONRPCHTTPTransport();
 
       // サーバーとトランスポートを接続
-      await server.connect(transport);
+      await mcpServer.connect(transport);
 
-      // リクエストを処理
-      await transport.handleRequest(req, res, req.body);
+      // JSONRPCメッセージを処理
+      transport.handleRequest(res, req.body as JSONRPCMessage);
 
       // クリーンアップ（メモリリーク防止）
       res.on("close", () => {
         transport?.close();
-        server?.close();
+        mcpServer?.close();
       });
     } catch (error) {
       // エラー時のクリーンアップ
       transport?.close();
-      server?.close();
+      mcpServer?.close();
 
-      if (error instanceof McpError) {
-        res.status(400).json({
-          error: {
-            code: error.code,
-            message: error.message,
-          },
-        });
-      } else {
-        res.status(500).json({
-          error: {
-            message: error instanceof Error ? error.message : "Internal server error",
-          },
-        });
+      if (!res.headersSent) {
+        if (error instanceof McpError) {
+          res.status(400).json({
+            jsonrpc: "2.0",
+            error: { code: error.code, message: error.message },
+            id: null
+          });
+        } else {
+          res.status(500).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32603,
+              message: error instanceof Error ? error.message : "Internal server error"
+            },
+            id: null
+          });
+        }
       }
     }
   });
