@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-
 import { startServer } from "@/mcp/index.js";
 
 // エントリポイント

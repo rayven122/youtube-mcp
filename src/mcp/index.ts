@@ -32,44 +32,46 @@ const YoutubeApiKeySchema = z
  * 純粋なJSON-RPC over HTTPトランスポート（SSE不使用）
  * application/jsonのみを要求し、レスポンスも純粋なJSONで返す
  */
-class JSONRPCHTTPTransport implements Transport {
-  private _response: ServerResponse | null = null;
-  private _messageHandler: ((message: JSONRPCMessage) => void) | null = null;
+const createJSONRPCHTTPTransport = (): Transport & {
+  handleRequest: (res: ServerResponse, message: JSONRPCMessage) => void;
+} => {
+  let response: ServerResponse | null = null;
 
-  onclose?: () => void;
-  onerror?: (error: Error) => void;
-  onmessage?: (message: JSONRPCMessage) => void;
+  return {
+    onclose: undefined,
+    onerror: undefined,
+    onmessage: undefined,
 
-  async start(): Promise<void> {
-    // ノーオペ: 接続はリクエストごとに管理される
-  }
+    async start(): Promise<void> {
+      // ノーオペ: 接続はリクエストごとに管理される
+    },
 
-  send(message: JSONRPCMessage): Promise<void> {
-    if (this._response && !this._response.headersSent) {
-      this._response.setHeader("Content-Type", "application/json");
-      this._response.end(JSON.stringify(message));
-    }
-    return Promise.resolve();
-  }
+    send(message: JSONRPCMessage): Promise<void> {
+      if (response && !response.headersSent) {
+        response.setHeader("Content-Type", "application/json");
+        response.end(JSON.stringify(message));
+      }
+      return Promise.resolve();
+    },
 
-  close(): Promise<void> {
-    this._response = null;
-    this._messageHandler = null;
-    return Promise.resolve();
-  }
+    close(): Promise<void> {
+      response = null;
+      return Promise.resolve();
+    },
 
-  /**
-   * HTTPリクエストを処理してJSONRPCメッセージをサーバーに送信
-   */
-  handleRequest(res: ServerResponse, message: JSONRPCMessage): void {
-    this._response = res;
+    /**
+     * HTTPリクエストを処理してJSONRPCメッセージをサーバーに送信
+     */
+    handleRequest(res: ServerResponse, message: JSONRPCMessage): void {
+      response = res;
 
-    // onmessageハンドラーを呼び出してMcpServerにメッセージを渡す
-    if (this.onmessage) {
-      this.onmessage(message);
-    }
-  }
-}
+      // onmessageハンドラーを呼び出してMcpServerにメッセージを渡す
+      if (this.onmessage) {
+        this.onmessage(message);
+      }
+    },
+  };
+};
 
 const startStreamableHttpServer = () => {
   // HTTPポートの取得（デフォルト: 8080）
@@ -160,7 +162,7 @@ const startStreamableHttpServer = () => {
 
   // MCP エンドポイント（完全にstateless: リクエストごとにサーバーとトランスポートを作成）
   app.post("/mcp", async (req, res) => {
-    let transport: JSONRPCHTTPTransport | null = null;
+    let transport: ReturnType<typeof createJSONRPCHTTPTransport> | null = null;
     let mcpServer: McpServer | null = null;
 
     try {
@@ -183,7 +185,7 @@ const startStreamableHttpServer = () => {
 
       // リクエストごとに新しいサーバーとトランスポートを作成
       mcpServer = createMCPServer(apiKey);
-      transport = new JSONRPCHTTPTransport();
+      transport = createJSONRPCHTTPTransport();
 
       // サーバーとトランスポートを接続
       await mcpServer.connect(transport);
