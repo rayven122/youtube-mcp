@@ -10,6 +10,8 @@
 
 ## テスト実行方法
 
+### モード1: Stdioモード（MCP経由）
+
 1. **事前チェック**:
    - `.mcp.json`にyoutube-mcpの設定があることを確認
    - APIキーが正しく設定されていることを確認
@@ -24,7 +26,142 @@
    - レスポンスを確認し、期待値と比較
    - エラーの場合はエラーメッセージを確認
 
+### モード2: HTTPモード（localhost）
+
+localhostでHTTPサーバーを立ち上げて、curlやHTTPクライアントでテストする方法です。
+
+#### 1. サーバー起動
+
+```bash
+# ビルド
+pnpm build
+
+# HTTPモードでサーバー起動
+TRANSPORT_MODE=http YOUTUBE_API_KEY=your_api_key HTTP_PORT=8080 node dist/index.js
+```
+
+成功すると以下のようなメッセージが表示されます：
+```
+YouTube MCP Server (Streamable HTTP) started on port 8080
+Endpoint: http://localhost:8080/mcp
+Health check: http://localhost:8080/health
+```
+
+#### 2. ヘルスチェック
+
+```bash
+curl http://localhost:8080/health
+```
+
+期待される結果：
+```json
+{"status":"ok","server":"youtube-mcp-server","version":"1.0.0"}
+```
+
+#### 3. ツール一覧の取得
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-YouTube-API-Key: your_api_key" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+**重要な注意点**：
+- `Accept`ヘッダーには `application/json, text/event-stream` を含める必要があります
+- `X-YouTube-API-Key`ヘッダーでAPIキーを渡す（省略時は環境変数`YOUTUBE_API_KEY`が使用されます）
+
+#### 4. ツールの実行例
+
+##### 動画情報の取得（get_video）
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-YouTube-API-Key: your_api_key" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "get_video",
+      "arguments": {
+        "videoId": "dQw4w9WgXcQ"
+      }
+    }
+  }'
+```
+
+##### 動画検索（search_videos）
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-YouTube-API-Key: your_api_key" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "search_videos",
+      "arguments": {
+        "query": "TypeScript tutorial",
+        "maxResults": 5
+      }
+    }
+  }'
+```
+
+##### コメント取得（get_comment_threads）
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-YouTube-API-Key: your_api_key" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "get_comment_threads",
+      "arguments": {
+        "videoId": "dQw4w9WgXcQ",
+        "maxResults": 10,
+        "order": "relevance"
+      }
+    }
+  }'
+```
+
+#### 5. レスポンス形式
+
+レスポンスはServer-Sent Events (SSE)形式で返されます：
+
+```
+event: message
+data: {"jsonrpc":"2.0","result":{...},"id":1}
+```
+
+JSONのみを抽出する場合：
+```bash
+curl ... | grep "^data: " | sed 's/^data: //' | jq .
+```
+
+#### 6. HTTPモードのメリット
+
+- **Stateless**: 各リクエストが独立して処理される
+- **水平スケーリング可能**: 複数インスタンスを起動できる
+- **API統合が容易**: 任意のHTTPクライアントから呼び出し可能
+- **リクエストごとのAPIキー**: ヘッダーで異なるAPIキーを使い分け可能
+- **デバッグしやすい**: curlで直接テスト可能
+
 ### トラブルシューティング
+
+#### Stdioモード
 
 - **ツールが見つからない場合**:
   - `.mcp.json`の設定を確認
@@ -36,9 +173,32 @@
   - APIクォータの残量を確認
   - YouTube APIコンソールでキーの制限を確認
 
+#### HTTPモード
+
+- **サーバーが起動しない場合**:
+  - ポートが既に使用されていないか確認: `netstat -ano | findstr :8080` (Windows) / `lsof -i :8080` (Mac/Linux)
+  - `TRANSPORT_MODE=http`が正しく設定されているか確認
+  - ビルドが完了しているか確認: `pnpm build`
+
+- **"Not Acceptable" エラーが返る場合**:
+  - `Accept`ヘッダーに `application/json, text/event-stream` が含まれているか確認
+  - curlコマンドのヘッダー部分を見直す
+
+- **"API key not valid" エラーが返る場合**:
+  - `X-YouTube-API-Key`ヘッダーが正しく設定されているか確認
+  - 環境変数`YOUTUBE_API_KEY`が設定されているか確認（ヘッダー省略時）
+  - APIキーの有効性をYouTube APIコンソールで確認
+
+- **接続できない場合**:
+  - サーバーが起動しているか確認
+  - ファイアウォールの設定を確認
+  - `curl http://localhost:8080/health`でヘルスチェックを試す
+
 ## 前提条件
 
 ### 必須: .mcp.jsonの設定
+
+#### Stdioモード用設定
 
 `.mcp.json`に以下の設定が必要です：
 
@@ -57,11 +217,33 @@
 }
 ```
 
+#### HTTPモード用設定（オプション）
+
+HTTPサーバーとして動作させる場合：
+
+```json
+{
+  "mcpServers": {
+    "youtube-mcp-http": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./dist/index.js"],
+      "env": {
+        "TRANSPORT_MODE": "http",
+        "HTTP_PORT": "8080",
+        "YOUTUBE_API_KEY": "${YOUTUBE_API_KEY}"
+      }
+    }
+  }
+}
+```
+
 **重要**:
 
 - `YOUTUBE_API_KEY`には有効なYouTube Data API v3のキーを設定してください
 - APIキーが設定されていない、または無効な場合はテストが実行できません
 - ビルド済み（`pnpm build`実行済み）であることを確認してください
+- HTTPモードの場合、`TRANSPORT_MODE=http`を設定する必要があります
 
 ### 設定確認手順
 
@@ -374,7 +556,7 @@
 
 ## 8. 実行手順
 
-### 手動テスト
+### 手動テスト (Stdioモード)
 
 ```bash
 # 1. 環境変数設定
@@ -385,6 +567,42 @@ pnpm start
 
 # 3. 各ツールを順番にテスト
 # Claude/Cursorから各テストケースを実行
+```
+
+### 手動テスト (HTTPモード)
+
+```bash
+# 1. ビルド
+pnpm build
+
+# 2. HTTPサーバー起動
+TRANSPORT_MODE=http YOUTUBE_API_KEY=your-api-key HTTP_PORT=8080 node dist/index.js
+
+# 3. 別のターミナルでテスト実行
+# ヘルスチェック
+curl http://localhost:8080/health
+
+# ツール一覧取得
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-YouTube-API-Key: your-api-key" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# 動画情報取得
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "X-YouTube-API-Key: your-api-key" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/call",
+    "params": {
+      "name": "get_video",
+      "arguments": {"videoId": "dQw4w9WgXcQ"}
+    }
+  }'
 ```
 
 ### 自動テスト
@@ -418,6 +636,8 @@ pnpm test:coverage
 
 ## 10. 検証チェックリスト
 
+### 共通
+
 - [ ] 全ツールが正常に呼び出せる
 - [ ] 各ツールの必須パラメータが機能する
 - [ ] オプションパラメータが正しく処理される
@@ -425,6 +645,16 @@ pnpm test:coverage
 - [ ] 大量データでメモリリークがない
 - [ ] APIクォータ制限が適切に処理される
 - [ ] 並行実行で問題が発生しない
+
+### HTTPモード固有
+
+- [ ] ヘルスチェックエンドポイントが動作する
+- [ ] HTTPヘッダーでのAPIキー認証が機能する
+- [ ] 環境変数のAPIキーフォールバックが機能する
+- [ ] 複数の同時リクエストが正しく処理される（stateless動作）
+- [ ] リクエストごとにサーバーインスタンスが適切にクリーンアップされる
+- [ ] SSE形式のレスポンスが正しく返される
+- [ ] 異なるAPIキーで複数リクエストを送信できる
 
 ## 11. 字幕メタデータ関連ツール (Transcript Metadata Tools)
 

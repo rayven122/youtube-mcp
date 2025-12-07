@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:medium.com)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm build:*)",
+      "Bash(TRANSPORT_MODE=stdio node:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm format:*)",
+      "Bash(npx prettier:*)",
+      "Bash(TRANSPORT_MODE=stdio YOUTUBE_API_KEY=test_key node:*)",
+      "Bash(TRANSPORT_MODE=http HTTP_PORT=8080 YOUTUBE_API_KEY=test_key node:*)",
+      "Bash(pnpm test:*)",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)",
+      "Bash(git restore:*)",
+      "Bash(pnpm add:*)",
+      "Bash(curl:*)",
+      "Bash(TRANSPORT_MODE=http HTTP_PORT=8080 node:*)",
+      "Bash(TRANSPORT_MODE=http YOUTUBE_API_KEY=env_test_key HTTP_PORT=8080 node:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(TRANSPORT_MODE=http YOUTUBE_API_KEY=test_key HTTP_PORT=8080 node:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh api:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

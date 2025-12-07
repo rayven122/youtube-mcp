@@ -37,12 +37,14 @@
     "lint": "eslint",
     "format": "prettier --check .",
     "test": "vitest",
+    "start": "node dist/index.js",
     "prepublishOnly": "pnpm build && pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.21.0",
     "@plussub/srt-vtt-parser": "^2.0.5",
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "neverthrow": "^8.2.0",
     "zod": "^3.25.76"
   },
@@ -50,6 +52,7 @@
     "@eslint/compat": "^1.4.1",
     "@eslint/js": "^9.39.1",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.0",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.10.0",
     "@vitest/coverage-v8": "^4.0.7",
     "eslint": "^9.39.1",
