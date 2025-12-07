@@ -41,6 +41,7 @@ TRANSPORT_MODE=http YOUTUBE_API_KEY=your_api_key HTTP_PORT=8080 node dist/index.
 ```
 
 成功すると以下のようなメッセージが表示されます：
+
 ```
 YouTube MCP Server (Streamable HTTP) started on port 8080
 Endpoint: http://localhost:8080/mcp
@@ -54,8 +55,9 @@ curl http://localhost:8080/health
 ```
 
 期待される結果：
+
 ```json
-{"status":"ok","server":"youtube-mcp-server","version":"1.0.0"}
+{ "status": "ok", "server": "youtube-mcp-server", "version": "1.0.0" }
 ```
 
 #### 3. ツール一覧の取得
@@ -69,6 +71,7 @@ curl -X POST http://localhost:8080/mcp \
 ```
 
 **重要な注意点**：
+
 - `Accept`ヘッダーには `application/json` を含める必要があります
 - `X-YouTube-API-Key`ヘッダーでAPIキーを渡す（省略時は環境変数`YOUTUBE_API_KEY`が使用されます）
 
@@ -146,6 +149,7 @@ curl -X POST http://localhost:8080/mcp \
 ```
 
 jqで整形する場合：
+
 ```bash
 curl ... | jq .
 ```

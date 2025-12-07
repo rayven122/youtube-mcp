@@ -1,10 +1,11 @@
-import { youtubeApi } from "@/api/index.js";
 import type { YoutubeApiKey } from "@/api/apiKey.js";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import type { ServerResponse } from "node:http";
+import { youtubeApi } from "@/api/index.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -12,7 +13,6 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
-import type { ServerResponse } from "node:http";
 import { z } from "zod";
 
 import { handleToolRequest } from "./handlers.js";
@@ -44,16 +44,18 @@ class JSONRPCHTTPTransport implements Transport {
     // ノーオペ: 接続はリクエストごとに管理される
   }
 
-  async send(message: JSONRPCMessage): Promise<void> {
+  send(message: JSONRPCMessage): Promise<void> {
     if (this._response && !this._response.headersSent) {
       this._response.setHeader("Content-Type", "application/json");
       this._response.end(JSON.stringify(message));
     }
+    return Promise.resolve();
   }
 
-  async close(): Promise<void> {
+  close(): Promise<void> {
     this._response = null;
     this._messageHandler = null;
+    return Promise.resolve();
   }
 
   /**
@@ -69,7 +71,7 @@ class JSONRPCHTTPTransport implements Transport {
   }
 }
 
-const startStreamableHttpServer = async () => {
+const startStreamableHttpServer = () => {
   // HTTPポートの取得（デフォルト: 8080）
   const port = process.env.HTTP_PORT ? parseInt(process.env.HTTP_PORT, 10) : 8080;
 
@@ -88,7 +90,7 @@ const startStreamableHttpServer = async () => {
       if (apiKeyResult.isErr()) {
         throw new McpError(
           ErrorCode.InvalidParams,
-          "YouTube API key is required. Set via X-YouTube-API-Key header or YOUTUBE_API_KEY environment variable"
+          "YouTube API key is required. Set via X-YouTube-API-Key header or YOUTUBE_API_KEY environment variable",
         );
       }
       return apiKeyResult.value;
@@ -99,7 +101,7 @@ const startStreamableHttpServer = async () => {
     if (!validationResult.success) {
       throw new McpError(
         ErrorCode.InvalidParams,
-        validationResult.error.errors[0]?.message ?? "Invalid API key"
+        validationResult.error.errors[0]?.message ?? "Invalid API key",
       );
     }
 
@@ -164,14 +166,14 @@ const startStreamableHttpServer = async () => {
     try {
       // Content-Typeの検証（リクエストボディがJSON形式であることを確認）
       const contentType = req.headers["content-type"];
-      if (!contentType || !contentType.includes("application/json")) {
+      if (!contentType?.includes("application/json")) {
         res.status(415).json({
           jsonrpc: "2.0",
           error: {
             code: -32000,
-            message: "Unsupported Media Type: Content-Type must be application/json"
+            message: "Unsupported Media Type: Content-Type must be application/json",
           },
-          id: null
+          id: null,
         });
         return;
       }
@@ -191,29 +193,29 @@ const startStreamableHttpServer = async () => {
 
       // クリーンアップ（メモリリーク防止）
       res.on("close", () => {
-        transport?.close();
-        mcpServer?.close();
+        void transport?.close();
+        void mcpServer?.close();
       });
     } catch (error) {
       // エラー時のクリーンアップ
-      transport?.close();
-      mcpServer?.close();
+      void transport?.close();
+      void mcpServer?.close();
 
       if (!res.headersSent) {
         if (error instanceof McpError) {
           res.status(400).json({
             jsonrpc: "2.0",
             error: { code: error.code, message: error.message },
-            id: null
+            id: null,
           });
         } else {
           res.status(500).json({
             jsonrpc: "2.0",
             error: {
               code: -32603,
-              message: error instanceof Error ? error.message : "Internal server error"
+              message: error instanceof Error ? error.message : "Internal server error",
             },
-            id: null
+            id: null,
           });
         }
       }
@@ -295,15 +297,15 @@ const startStdioServer = async () => {
 };
 
 export const startServer = async () => {
-  const transportMode = process.env.TRANSPORT_MODE || "http";
+  const transportMode = process.env.TRANSPORT_MODE ?? "http";
 
   if (transportMode === "http") {
-    await startStreamableHttpServer();
+    startStreamableHttpServer();
   } else if (transportMode === "stdio") {
     await startStdioServer();
   } else {
     throw new Error(
-      `Invalid TRANSPORT_MODE: ${transportMode}. Must be "http" or "stdio"`
+      `Invalid TRANSPORT_MODE: ${transportMode}. Must be "http" or "stdio"`,
     );
   }
 };

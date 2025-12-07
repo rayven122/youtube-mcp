@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+
 import "dotenv/config";
+
 import { startServer } from "@/mcp/index.js";
 
 // エントリポイント

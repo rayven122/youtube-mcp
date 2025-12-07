@@ -30,8 +30,6 @@
     "deny": [],
     "ask": []
   },
-  "enabledMcpjsonServers": [
-    "youtube-mcp"
-  ],
+  "enabledMcpjsonServers": ["youtube-mcp"],
   "enableAllProjectMcpServers": true
 }
