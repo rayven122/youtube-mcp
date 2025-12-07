@@ -162,21 +162,7 @@ const startStreamableHttpServer = async () => {
     let mcpServer: McpServer | null = null;
 
     try {
-      // Acceptヘッダーの検証（application/jsonのみ要求）
-      const acceptHeader = req.headers.accept;
-      if (!acceptHeader || !acceptHeader.includes("application/json")) {
-        res.status(406).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Not Acceptable: Client must accept application/json"
-          },
-          id: null
-        });
-        return;
-      }
-
-      // Content-Typeの検証
+      // Content-Typeの検証（リクエストボディがJSON形式であることを確認）
       const contentType = req.headers["content-type"];
       if (!contentType || !contentType.includes("application/json")) {
         res.status(415).json({

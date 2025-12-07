@@ -29,5 +29,9 @@
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "youtube-mcp"
+  ],
+  "enableAllProjectMcpServers": true
 }
