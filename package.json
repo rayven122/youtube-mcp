@@ -41,7 +41,7 @@
     "prepublishOnly": "pnpm build && pnpm lint && pnpm typecheck && pnpm test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.21.0",
+    "@modelcontextprotocol/sdk": "^1.24.3",
     "@plussub/srt-vtt-parser": "^2.0.5",
     "express": "^5.2.1",
     "neverthrow": "^8.2.0",
