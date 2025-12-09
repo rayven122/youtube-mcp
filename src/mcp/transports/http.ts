@@ -28,8 +28,7 @@ const YoutubeApiKeySchema = z
   .brand<"YoutubeApiKey">();
 
 /**
- * 純粋なJSON-RPC over HTTPトランスポート（SSE不使用）
- * application/jsonのみを要求し、レスポンスも純粋なJSONで返す
+ * JSON-RPC over HTTP transport (stateless, no SSE)
  */
 const createJSONRPCHTTPTransport = (): Transport & {
   handleRequest: (res: ServerResponse, message: JSONRPCMessage) => void;
@@ -37,12 +36,9 @@ const createJSONRPCHTTPTransport = (): Transport & {
   let response: ServerResponse | null = null;
 
   return {
-    onclose: undefined,
-    onerror: undefined,
-    onmessage: undefined,
-
-    async start(): Promise<void> {
-      // ノーオペ: 接続はリクエストごとに管理される
+    start(): Promise<void> {
+      // No-op: connections managed per-request
+      return Promise.resolve();
     },
 
     send(message: JSONRPCMessage): Promise<void> {
@@ -58,12 +54,8 @@ const createJSONRPCHTTPTransport = (): Transport & {
       return Promise.resolve();
     },
 
-    /**
-     * HTTPリクエストを処理してJSONRPCメッセージをサーバーに送信
-     */
     handleRequest(res: ServerResponse, message: JSONRPCMessage): void {
       response = res;
-
       // onmessageハンドラーを呼び出してMcpServerにメッセージを渡す
       if (this.onmessage) {
         this.onmessage(message);
