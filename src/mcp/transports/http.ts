@@ -20,11 +20,12 @@ import { playlistTools } from "../tools/playlists.js";
 import { transcriptTools } from "../tools/transcripts.js";
 import { videoTools } from "../tools/videos.js";
 
-// YouTube API Key validation schema
+// YouTube API Key validation schema with brand
 const YoutubeApiKeySchema = z
   .string({ required_error: "API key is required" })
   .trim()
-  .min(1, "API key is required");
+  .min(1, "API key is required")
+  .brand<"YoutubeApiKey">();
 
 /**
  * 純粋なJSON-RPC over HTTPトランスポート（SSE不使用）
@@ -105,8 +106,7 @@ export const startStreamableHttpServer = () => {
       );
     }
 
-    // 検証後にブランド型にキャスト
-    return validationResult.data as YoutubeApiKey;
+    return validationResult.data;
   };
 
   // リクエストごとにサーバーインスタンスを作成する関数
