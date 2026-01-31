@@ -1,9 +1,7 @@
 import type { YoutubeApiKey } from "@/api/apiKey.js";
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import type { ServerResponse } from "node:http";
 import { youtubeApi } from "@/api/index.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ErrorCode,
@@ -28,40 +26,85 @@ const YoutubeApiKeySchema = z
   .brand<"YoutubeApiKey">();
 
 /**
- * JSON-RPC over HTTP transport (stateless, no SSE)
+ * リクエストからAPIキーを抽出する
  */
-const createJSONRPCHTTPTransport = (): Transport & {
-  handleRequest: (res: ServerResponse, message: JSONRPCMessage) => void;
-} => {
-  let response: ServerResponse | null = null;
+const extractApiKey = (req: express.Request): YoutubeApiKey => {
+  // HTTPヘッダーから YouTube API キーを取得
+  const headerApiKey = req.headers["x-youtube-api-key"] as string | undefined;
 
-  return {
-    start(): Promise<void> {
-      // No-op: connections managed per-request
-      return Promise.resolve();
-    },
+  if (!headerApiKey) {
+    // ヘッダーにない場合は環境変数から取得を試みる
+    const apiKeyResult = youtubeApi.getApiKeyFromEnv(process.env);
+    if (apiKeyResult.isErr()) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        "YouTube API key is required. Set via X-YouTube-API-Key header or YOUTUBE_API_KEY environment variable",
+      );
+    }
+    return apiKeyResult.value;
+  }
 
-    send(message: JSONRPCMessage): Promise<void> {
-      if (response && !response.headersSent) {
-        response.setHeader("Content-Type", "application/json");
-        response.end(JSON.stringify(message));
-      }
-      return Promise.resolve();
-    },
+  // ヘッダーから取得したAPIキーを検証
+  const validationResult = YoutubeApiKeySchema.safeParse(headerApiKey);
+  if (!validationResult.success) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      validationResult.error.errors[0]?.message ?? "Invalid API key",
+    );
+  }
 
-    close(): Promise<void> {
-      response = null;
-      return Promise.resolve();
-    },
+  return validationResult.data;
+};
 
-    handleRequest(res: ServerResponse, message: JSONRPCMessage): void {
-      response = res;
-      // onmessageハンドラーを呼び出してMcpServerにメッセージを渡す
-      if (this.onmessage) {
-        this.onmessage(message);
-      }
+/**
+ * MCPサーバーインスタンスを作成する
+ */
+const createMCPServer = (apiKey: YoutubeApiKey): McpServer => {
+  const mcpServer = new McpServer(
+    {
+      name: "youtube-mcp-server",
+      version: "1.0.0",
     },
-  };
+    {
+      capabilities: {
+        tools: {},
+      },
+    },
+  );
+
+  // 低レベルAPIを使用してツールを登録（現在のJSON Schemaを維持）
+  mcpServer.server.setRequestHandler(ListToolsRequestSchema, () => {
+    return {
+      tools: [
+        ...videoTools,
+        ...channelTools,
+        ...playlistTools,
+        ...commentTools,
+        ...transcriptTools,
+      ],
+    };
+  });
+
+  // ツール実行ハンドラー
+  mcpServer.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name: toolName, arguments: args } = request.params;
+
+    // すべてのツールを共通ハンドラーで処理
+    const result = await handleToolRequest(toolName, args, apiKey);
+
+    // Result型のエラーチェック
+    if (result.isErr()) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        result.error instanceof Error ? result.error.message : "Operation failed",
+      );
+    }
+
+    // MCPの期待する形式でレスポンスを返す
+    return result.value;
+  });
+
+  return mcpServer;
 };
 
 export const startStreamableHttpServer = () => {
@@ -70,129 +113,41 @@ export const startStreamableHttpServer = () => {
 
   // Expressアプリケーションの初期化
   const app = express();
-  app.use(express.json());
 
-  // ツール実行時のAPIキー取得用ヘルパー
-  const extractApiKey = (req: express.Request): YoutubeApiKey => {
-    // HTTPヘッダーから YouTube API キーを取得
-    const headerApiKey = req.headers["x-youtube-api-key"] as string | undefined;
+  // MCP SDKのStreamableHTTPServerTransportを使用（statelessモード）
+  // sessionIdGenerator: undefined でstatelessモードを有効化
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+  });
 
-    if (!headerApiKey) {
-      // ヘッダーにない場合は環境変数から取得を試みる
-      const apiKeyResult = youtubeApi.getApiKeyFromEnv(process.env);
-      if (apiKeyResult.isErr()) {
-        throw new McpError(
-          ErrorCode.InvalidParams,
-          "YouTube API key is required. Set via X-YouTube-API-Key header or YOUTUBE_API_KEY environment variable",
-        );
-      }
-      return apiKeyResult.value;
-    }
+  // MCPサーバーインスタンスを保持（リクエストごとにAPIキーを更新）
+  let currentApiKey: YoutubeApiKey | null = null;
+  let mcpServer: McpServer | null = null;
 
-    // ヘッダーから取得したAPIキーを検証
-    const validationResult = YoutubeApiKeySchema.safeParse(headerApiKey);
-    if (!validationResult.success) {
-      throw new McpError(
-        ErrorCode.InvalidParams,
-        validationResult.error.errors[0]?.message ?? "Invalid API key",
-      );
-    }
-
-    return validationResult.data;
-  };
-
-  // リクエストごとにサーバーインスタンスを作成する関数
-  const createMCPServer = (apiKey: YoutubeApiKey) => {
-    const mcpServer = new McpServer(
-      {
-        name: "youtube-mcp-server",
-        version: "1.0.0",
-      },
-      {
-        capabilities: {
-          tools: {},
-        },
-      },
-    );
-
-    // 低レベルAPIを使用してツールを登録（現在のJSON Schemaを維持）
-    mcpServer.server.setRequestHandler(ListToolsRequestSchema, () => {
-      return {
-        tools: [
-          ...videoTools,
-          ...channelTools,
-          ...playlistTools,
-          ...commentTools,
-          ...transcriptTools,
-        ],
-      };
-    });
-
-    // ツール実行ハンドラー
-    mcpServer.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name: toolName, arguments: args } = request.params;
-
-      // すべてのツールを共通ハンドラーで処理
-      const result = await handleToolRequest(toolName, args, apiKey);
-
-      // Result型のエラーチェック
-      if (result.isErr()) {
-        throw new McpError(
-          ErrorCode.InternalError,
-          result.error instanceof Error ? result.error.message : "Operation failed",
-        );
-      }
-
-      // MCPの期待する形式でレスポンスを返す
-      return result.value;
-    });
-
-    return mcpServer;
-  };
-
-  // MCP エンドポイント（完全にstateless: リクエストごとにサーバーとトランスポートを作成）
+  // MCPエンドポイント
+  // express.json()はStreamableHTTPServerTransportが内部で処理するため不要
   app.post("/mcp", async (req, res) => {
-    let transport: ReturnType<typeof createJSONRPCHTTPTransport> | null = null;
-    let mcpServer: McpServer | null = null;
-
     try {
-      // Content-Typeの検証（リクエストボディがJSON形式であることを確認）
-      const contentType = req.headers["content-type"];
-      if (!contentType?.includes("application/json")) {
-        res.status(415).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Unsupported Media Type: Content-Type must be application/json",
-          },
-          id: null,
-        });
-        return;
-      }
-
-      // APIキーを取得
+      // APIキーを抽出
       const apiKey = extractApiKey(req);
 
-      // リクエストごとに新しいサーバーとトランスポートを作成
-      mcpServer = createMCPServer(apiKey);
-      transport = createJSONRPCHTTPTransport();
+      // APIキーが変更された場合、または初回の場合はサーバーを再作成
+      if (!mcpServer || currentApiKey !== apiKey) {
+        // 既存のサーバーをクローズ
+        if (mcpServer) {
+          await mcpServer.close();
+        }
 
-      // サーバーとトランスポートを接続
-      await mcpServer.connect(transport);
+        currentApiKey = apiKey;
+        mcpServer = createMCPServer(apiKey);
 
-      // JSONRPCメッセージを処理
-      transport.handleRequest(res, req.body as JSONRPCMessage);
+        // サーバーとトランスポートを接続
+        await mcpServer.connect(transport);
+      }
 
-      // クリーンアップ（メモリリーク防止）
-      res.on("close", () => {
-        void transport?.close();
-        void mcpServer?.close();
-      });
+      // リクエストを処理（parsedBodyなしで渡す - トランスポートが自動でパース）
+      await transport.handleRequest(req, res);
     } catch (error) {
-      // エラー時のクリーンアップ
-      void transport?.close();
-      void mcpServer?.close();
-
       if (!res.headersSent) {
         if (error instanceof McpError) {
           res.status(400).json({
@@ -214,8 +169,37 @@ export const startStreamableHttpServer = () => {
     }
   });
 
+  // GETリクエストも処理（SSE接続用）
+  app.get("/mcp", async (req, res) => {
+    try {
+      // GETリクエストではAPIキーなしでも初期化を許可（ツール一覧取得のみ）
+      if (!mcpServer) {
+        // 環境変数からAPIキーを取得を試みる
+        const apiKeyResult = youtubeApi.getApiKeyFromEnv(process.env);
+        if (apiKeyResult.isOk()) {
+          currentApiKey = apiKeyResult.value;
+          mcpServer = createMCPServer(currentApiKey);
+          await mcpServer.connect(transport);
+        }
+      }
+
+      await transport.handleRequest(req, res);
+    } catch (error) {
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: error instanceof Error ? error.message : "Internal server error",
+          },
+          id: null,
+        });
+      }
+    }
+  });
+
   // ヘルスチェックエンドポイント
-  app.get("/health", (req, res) => {
+  app.get("/health", (_req, res) => {
     res.json({ status: "ok", server: "youtube-mcp-server", version: "1.0.0" });
   });
 
