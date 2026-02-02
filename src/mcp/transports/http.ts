@@ -114,38 +114,28 @@ export const startStreamableHttpServer = () => {
   // Expressアプリケーションの初期化
   const app = express();
 
-  // MCP SDKのStreamableHTTPServerTransportを使用（statelessモード）
-  // sessionIdGenerator: undefined でstatelessモードを有効化
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-
-  // MCPサーバーインスタンスを保持（リクエストごとにAPIキーを更新）
-  let currentApiKey: YoutubeApiKey | null = null;
-  let mcpServer: McpServer | null = null;
-
   // MCPエンドポイント
-  // express.json()はStreamableHTTPServerTransportが内部で処理するため不要
+  // Statelessモード: リクエストごとに新しいサーバーとトランスポートを作成
+  // これにより「Transport already started」エラーを回避
   app.post("/mcp", async (req, res) => {
+    let mcpServer: McpServer | null = null;
+
     try {
       // APIキーを抽出
       const apiKey = extractApiKey(req);
 
-      // APIキーが変更された場合、または初回の場合はサーバーを再作成
-      if (!mcpServer || currentApiKey !== apiKey) {
-        // 既存のサーバーをクローズ
-        if (mcpServer) {
-          await mcpServer.close();
-        }
+      // リクエストごとに新しいトランスポートを作成（statelessモード）
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
 
-        currentApiKey = apiKey;
-        mcpServer = createMCPServer(apiKey);
+      // リクエストごとに新しいMCPサーバーを作成
+      mcpServer = createMCPServer(apiKey);
 
-        // サーバーとトランスポートを接続
-        await mcpServer.connect(transport);
-      }
+      // サーバーとトランスポートを接続
+      await mcpServer.connect(transport);
 
-      // リクエストを処理（parsedBodyなしで渡す - トランスポートが自動でパース）
+      // リクエストを処理
       await transport.handleRequest(req, res);
     } catch (error) {
       if (!res.headersSent) {
@@ -166,33 +156,67 @@ export const startStreamableHttpServer = () => {
           });
         }
       }
+    } finally {
+      // リクエスト処理後にサーバーをクリーンアップ
+      if (mcpServer) {
+        await mcpServer.close().catch(() => {
+          // クローズエラーは無視（すでにクローズされている可能性）
+        });
+      }
     }
   });
 
   // GETリクエストも処理（SSE接続用）
   app.get("/mcp", async (req, res) => {
+    let mcpServer: McpServer | null = null;
+
     try {
-      // GETリクエストではAPIキーなしでも初期化を許可（ツール一覧取得のみ）
-      if (!mcpServer) {
-        // 環境変数からAPIキーを取得を試みる
-        const apiKeyResult = youtubeApi.getApiKeyFromEnv(process.env);
-        if (apiKeyResult.isOk()) {
-          currentApiKey = apiKeyResult.value;
-          mcpServer = createMCPServer(currentApiKey);
-          await mcpServer.connect(transport);
-        }
+      // 環境変数からAPIキーを取得を試みる
+      const apiKeyResult = youtubeApi.getApiKeyFromEnv(process.env);
+      if (apiKeyResult.isErr()) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "YouTube API key is required for SSE connections. Set YOUTUBE_API_KEY environment variable",
+        );
       }
 
+      // リクエストごとに新しいトランスポートを作成
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
+
+      // リクエストごとに新しいMCPサーバーを作成
+      mcpServer = createMCPServer(apiKeyResult.value);
+
+      // サーバーとトランスポートを接続
+      await mcpServer.connect(transport);
+
+      // リクエストを処理
       await transport.handleRequest(req, res);
     } catch (error) {
       if (!res.headersSent) {
-        res.status(500).json({
-          jsonrpc: "2.0",
-          error: {
-            code: -32603,
-            message: error instanceof Error ? error.message : "Internal server error",
-          },
-          id: null,
+        if (error instanceof McpError) {
+          res.status(400).json({
+            jsonrpc: "2.0",
+            error: { code: error.code, message: error.message },
+            id: null,
+          });
+        } else {
+          res.status(500).json({
+            jsonrpc: "2.0",
+            error: {
+              code: -32603,
+              message: error instanceof Error ? error.message : "Internal server error",
+            },
+            id: null,
+          });
+        }
+      }
+    } finally {
+      // リクエスト処理後にサーバーをクリーンアップ
+      if (mcpServer) {
+        await mcpServer.close().catch(() => {
+          // クローズエラーは無視
         });
       }
     }
